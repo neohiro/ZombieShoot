@@ -12,11 +12,24 @@ BLUE = (0, 0, 255)
 DARK_RED = (139, 0, 0)
 YELLOW = (255, 255, 0)
 MAGENTA = (255, 0, 255) # Brighter color for the Gatling gun
+BARRIER_COLOR = (120, 120, 120)
 
-# New colors for the floor
-FLOOR_LIGHT_GRAY = (40, 40, 40)
-FLOOR_DARK_GRAY = (30, 30, 30)
-TILE_SIZE = 100 # Doubled the size of the tiles
+# New colors for the floor with eight gradients
+FLOOR_GRAY_1 = (20, 20, 20)
+FLOOR_GRAY_2 = (40, 40, 40)
+FLOOR_GRAY_3 = (60, 60, 60)
+FLOOR_GRAY_4 = (80, 80, 80)
+FLOOR_GRAY_5 = (100, 100, 100)
+FLOOR_GRAY_6 = (120, 120, 120)
+FLOOR_GRAY_7 = (140, 140, 140)
+FLOOR_COLORS = [FLOOR_GRAY_1, FLOOR_GRAY_2, FLOOR_GRAY_3, FLOOR_GRAY_4, FLOOR_GRAY_5, FLOOR_GRAY_6, FLOOR_GRAY_7]
+
+
+# Hexagon dimensions
+HEX_SIDE = 60
+# Recalculated based on a proper hex grid
+HEX_WIDTH = HEX_SIDE * 2
+HEX_HEIGHT = int(HEX_SIDE * math.sqrt(3))
 
 # --- Initialize Pygame ---
 pygame.init()
@@ -49,29 +62,51 @@ def generate_sound(frequency, duration, volume):
     frequency: The frequency of the sine wave in Hz.
     duration: The duration of the sound in milliseconds.
     volume: The volume (0.0 to 1.0).
+    
+    This version has a corrected calculation for the sound's volume envelope
+    to prevent the ValueError from mismatched array sizes.
     """
     sample_rate = 44100
     n_samples = int(round(duration * sample_rate / 1000))
-    # Generate a sine wave with a simple attack/decay
-    fade_in_len = int(n_samples * 0.1)
-    fade_out_len = int(n_samples * 0.9)
-    fade_in_arr = np.linspace(0, 1, fade_in_len)
-    fade_out_arr = np.linspace(1, 0, n_samples - fade_in_len - (n_samples - fade_out_len))
-    full_arr = np.concatenate([fade_in_arr, np.ones(n_samples - len(fade_in_arr) - len(fade_out_arr)), fade_out_arr])
+    
+    # Define a simple fade-in/out length (e.g., 10% of the total duration)
+    fade_len = int(n_samples * 0.1)
+    
+    # Calculate the length of the sustained (middle) portion
+    sustain_len = n_samples - (fade_len * 2)
+    
+    # Handle cases where the sound is too short for a fade
+    if sustain_len < 0:
+        fade_len = n_samples // 2
+        sustain_len = 0
+    
+    # Generate the fade-in, sustain, and fade-out arrays
+    fade_in = np.linspace(0, 1, fade_len)
+    sustain = np.ones(sustain_len)
+    fade_out = np.linspace(1, 0, n_samples - fade_len - sustain_len) # Correct length calculation
+    
+    # Concatenate them to create the full volume envelope array
+    full_arr = np.concatenate([fade_in, sustain, fade_out])
     
     buf = np.zeros((n_samples, 2), dtype=np.int16)
     max_sample = 32767
+    
+    # Generate the sine wave
+    sine_wave = np.sin(2 * np.pi * np.arange(n_samples) * frequency / sample_rate)
+    
+    # Multiply the sine wave by the volume envelope
+    scaled_wave = np.array(sine_wave * max_sample * volume * full_arr, dtype=np.int16)
+    
     for channel in range(2):
-        sine_wave = np.sin(2 * np.pi * np.arange(n_samples) * frequency / sample_rate)
-        scaled_wave = np.array(sine_wave * max_sample * volume * full_arr, dtype=np.int16)
         buf[:, channel] = scaled_wave
     
     sound = pygame.sndarray.make_sound(buf)
     return sound
 
-# Generate our sound effects
-shoot_sound = generate_sound(1000, 50, 0.5)
+# Generate our sound effects internally
+shoot_sound = generate_sound(500, 50, 0.25) # The volume has been lowered from 0.375 to 0.25
 hit_sound = generate_sound(300, 100, 0.3)
+zombie_death_sound = generate_sound(150, 200, 0.6)
 
 # --- Classes ---
 class Player(pygame.sprite.Sprite):
@@ -291,17 +326,84 @@ class PowerUp(pygame.sprite.Sprite):
     def update(self):
         # The power-up doesn't move, so this method is empty.
         pass
+        
+class Particle:
+    """
+    Represents a single particle for a visual effect.
+    """
+    def __init__(self, pos, color):
+        self.pos = list(pos)
+        self.color = color
+        self.velocity = [random.uniform(-3, 3), random.uniform(-3, 3)]
+        self.lifespan = random.randint(10, 30)
+        self.size = 5
+
+    def update(self):
+        # Update particle position
+        self.pos[0] += self.velocity[0]
+        self.pos[1] += self.velocity[1]
+        # Decrease lifespan
+        self.lifespan -= 1
+        # Decrease size slightly for a fading effect
+        self.size = max(0, self.size - 0.2)
+
+    def draw(self, screen_surface):
+        if self.lifespan > 0 and self.size > 0:
+            pygame.draw.circle(screen_surface, self.color, (int(self.pos[0]), int(self.pos[1])), int(self.size))
+
+class Barrier(pygame.sprite.Sprite):
+    """
+    Represents a barrier that blocks movement.
+    """
+    def __init__(self, pos):
+        super().__init__()
+        self.width = random.randint(50, 200)
+        self.height = random.randint(50, 200)
+        self.image = pygame.Surface([self.width, self.height])
+        self.image.fill(BARRIER_COLOR)
+        self.rect = self.image.get_rect(topleft=pos)
 
 # --- Helper Functions ---
 def draw_floor_background():
-    """Draws a tiled floor pattern on the screen."""
-    for y in range(0, SCREEN_HEIGHT, TILE_SIZE):
-        for x in range(0, SCREEN_WIDTH, TILE_SIZE):
-            if (x // TILE_SIZE + y // TILE_SIZE) % 2 == 0:
-                color = FLOOR_LIGHT_GRAY
-            else:
-                color = FLOOR_DARK_GRAY
-            pygame.draw.rect(screen, color, (x, y, TILE_SIZE, TILE_SIZE))
+    """
+    Draws a tiled hexagonal floor pattern on the screen.
+    This version uses a correct alignment algorithm for flat-topped hexagons
+    and eight shades of gray for the tiles.
+    """
+    hex_radius = HEX_SIDE
+    hex_width = hex_radius * 2
+    hex_height = hex_radius * math.sqrt(3)
+
+    # Calculate number of hexes to draw
+    num_cols = int(SCREEN_WIDTH / (hex_width * 0.75)) + 2
+    num_rows = int(SCREEN_HEIGHT / hex_height) + 2
+
+    for row in range(num_rows):
+        for col in range(num_cols):
+            # Calculate the center of the hexagon
+            x_pos = col * hex_width * 0.75
+            y_pos = row * hex_height
+            
+            # Apply offset for every other column
+            if col % 2 != 0:
+                y_pos += hex_height / 2
+
+            # Determine color based on a more robust pattern
+            # The (row * 2 + col) % 7 pattern provides a better distribution for hex grids.
+            color_index = (row * 2 + col) % 7
+            color = FLOOR_COLORS[color_index]
+
+            # Vertices for a flat-topped hexagon
+            vertices = [
+                (x_pos + hex_radius, y_pos),
+                (x_pos + hex_radius * 0.5, y_pos + hex_height * 0.5),
+                (x_pos - hex_radius * 0.5, y_pos + hex_height * 0.5),
+                (x_pos - hex_radius, y_pos),
+                (x_pos - hex_radius * 0.5, y_pos - hex_height * 0.5),
+                (x_pos + hex_radius * 0.5, y_pos - hex_height * 0.5),
+            ]
+            
+            pygame.draw.polygon(screen, color, vertices)
 
 # --- Menu Functions ---
 def show_start_menu():
@@ -402,7 +504,7 @@ def show_audio_menu():
     """
     Displays the audio options menu with controls for volume and mute.
     """
-    global global_volume, is_muted, shoot_sound, hit_sound
+    global global_volume, is_muted, shoot_sound, hit_sound, zombie_death_sound
     audio_running = True
     slider_dragging = False
 
@@ -436,9 +538,11 @@ def show_audio_menu():
                     if is_muted:
                         shoot_sound.set_volume(0)
                         hit_sound.set_volume(0)
+                        zombie_death_sound.set_volume(0)
                     else:
                         shoot_sound.set_volume(global_volume)
                         hit_sound.set_volume(global_volume)
+                        zombie_death_sound.set_volume(global_volume)
                 if back_rect.collidepoint(event.pos):
                     return "options_menu"
 
@@ -455,6 +559,7 @@ def show_audio_menu():
                 # Set volume on individual sound objects instead of the mixer module
                 shoot_sound.set_volume(global_volume)
                 hit_sound.set_volume(global_volume)
+                zombie_death_sound.set_volume(global_volume)
                 
                 is_muted = (global_volume == 0)
 
@@ -687,6 +792,8 @@ def main_game_loop():
     bullets = pygame.sprite.Group()
     zombies = pygame.sprite.Group()
     powerups = pygame.sprite.Group() # New group for power-ups
+    barriers = pygame.sprite.Group() # New group for barriers
+    particles = [] # A list to hold the new particle effects
 
     # --- Game Variables ---
     player = Player()
@@ -699,6 +806,31 @@ def main_game_loop():
     is_game_over = False
     is_paused = False # New state variable for pausing the game
     is_shooting = False # New state variable to track if the mouse button is held down
+
+    # Generate a random number of barriers and place them on the screen
+    num_barriers = random.randint(3, 7)
+    for _ in range(num_barriers):
+        while True:
+            # Pick a random position for the new barrier
+            x = random.randint(50, SCREEN_WIDTH - 250)
+            y = random.randint(50, SCREEN_HEIGHT - 250)
+            new_barrier = Barrier((x, y))
+            
+            # Check for overlaps with other barriers and the player's starting position
+            # This is a simple but effective way to ensure no overlaps
+            overlap = False
+            if pygame.sprite.spritecollide(new_barrier, barriers, False):
+                overlap = True
+            
+            # Also ensure it doesn't spawn too close to the player
+            player_start_rect = pygame.Rect(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 100, 200, 200)
+            if new_barrier.rect.colliderect(player_start_rect):
+                overlap = True
+
+            if not overlap:
+                all_sprites.add(new_barrier)
+                barriers.add(new_barrier)
+                break
 
     # --- Main Game Loop ---
     running = True
@@ -742,12 +874,31 @@ def main_game_loop():
             if is_shooting:
                 player.shoot(pygame.mouse.get_pos(), all_sprites, bullets)
 
+            # Store the player's old position before updating
+            player_old_rect = player.rect.copy()
+            
             # Update player and zombies separately to avoid the TypeError
             player.update()
             zombies.update(player.rect)
             bullets.update()
             powerups.update()
             
+            # Update and clean up particles
+            for particle in particles:
+                particle.update()
+            particles = [p for p in particles if p.lifespan > 0]
+            
+            # Collision detection for player and barriers
+            if pygame.sprite.spritecollide(player, barriers, False):
+                player.rect = player_old_rect
+            
+            # Collision detection for zombies and barriers
+            for zombie in zombies:
+                if pygame.sprite.spritecollide(zombie, barriers, False):
+                    # For a simple bounce, reverse the movement direction
+                    zombie.rect.x -= zombie.speed
+                    zombie.rect.y -= zombie.speed
+
             # Spawn new zombies
             now = pygame.time.get_ticks()
             if now - last_zombie_spawn_time > zombie_spawn_rate:
@@ -767,7 +918,9 @@ def main_game_loop():
                 powerups.add(new_powerup)
                 last_powerup_spawn_time = now
 
-            # Check for collisions between bullets and zombies
+            # Check for collisions between bullets and zombies, and bullets and barriers
+            # Bullets are destroyed on impact with either
+            pygame.sprite.groupcollide(bullets, barriers, True, False)
             hits = pygame.sprite.groupcollide(zombies, bullets, False, True)
             for zombie, bullet_hit_list in hits.items():
                 hit_sound.play() # Play sound on hit
@@ -775,6 +928,10 @@ def main_game_loop():
                 # Speed up the zombie when it's hit
                 zombie.speed_up(0.5)
                 if zombie.health <= 0:
+                    zombie_death_sound.play() # Play sound on zombie death
+                    # Create a burst of particles when the zombie is destroyed
+                    for _ in range(20):
+                        particles.append(Particle(zombie.rect.center, GREEN))
                     zombie.kill()
                     score += 10
                     
@@ -792,7 +949,13 @@ def main_game_loop():
 
         # --- Drawing ---
         draw_floor_background()
+        
+        # Draw all sprites including barriers
         all_sprites.draw(screen)
+        
+        # Draw the particles after all sprites
+        for particle in particles:
+            particle.draw(screen)
 
         # Display score and health
         score_text = font.render(f'Score: {score}', True, WHITE)
