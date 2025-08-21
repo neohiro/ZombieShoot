@@ -11,7 +11,12 @@ GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 DARK_RED = (139, 0, 0)
 YELLOW = (255, 255, 0)
-DARK_PURPLE = (75, 0, 130) # New color for the Gatling gun
+MAGENTA = (255, 0, 255) # Brighter color for the Gatling gun
+
+# New colors for the floor
+FLOOR_LIGHT_GRAY = (40, 40, 40)
+FLOOR_DARK_GRAY = (30, 30, 30)
+TILE_SIZE = 100 # Doubled the size of the tiles
 
 # --- Initialize Pygame ---
 pygame.init()
@@ -28,6 +33,14 @@ large_font = pygame.font.Font(None, 72)
 top_scores = []
 global_volume = 0.5
 is_muted = False
+# Default keybinds, now a global dictionary
+keybinds = {
+    'move_up': pygame.K_w,
+    'move_down': pygame.K_s,
+    'move_left': pygame.K_a,
+    'move_right': pygame.K_d
+}
+
 
 # --- Sound Generation ---
 def generate_sound(frequency, duration, volume):
@@ -84,17 +97,29 @@ class Player(pygame.sprite.Sprite):
     def update(self):
         """
         Updates player position based on key presses.
-        Added arrow key controls for movement.
+        Now uses the global keybinds dictionary for movement.
         """
         keys = pygame.key.get_pressed()
-        if (keys[pygame.K_a] or keys[pygame.K_LEFT]) and self.rect.left > 0:
+        # Movement with WASD
+        if keys[keybinds['move_left']] and self.rect.left > 0:
             self.rect.x -= self.speed
-        if (keys[pygame.K_d] or keys[pygame.K_RIGHT]) and self.rect.right < SCREEN_WIDTH:
+        if keys[keybinds['move_right']] and self.rect.right < SCREEN_WIDTH:
             self.rect.x += self.speed
-        if (keys[pygame.K_w] or keys[pygame.K_UP]) and self.rect.top > 0:
+        if keys[keybinds['move_up']] and self.rect.top > 0:
             self.rect.y -= self.speed
-        if (keys[pygame.K_s] or keys[pygame.K_DOWN]) and self.rect.bottom < SCREEN_HEIGHT:
+        if keys[keybinds['move_down']] and self.rect.bottom < SCREEN_HEIGHT:
             self.rect.y += self.speed
+            
+        # Movement with Arrow Keys
+        if keys[pygame.K_LEFT] and self.rect.left > 0:
+            self.rect.x -= self.speed
+        if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:
+            self.rect.x += self.speed
+        if keys[pygame.K_UP] and self.rect.top > 0:
+            self.rect.y -= self.speed
+        if keys[pygame.K_DOWN] and self.rect.bottom < SCREEN_HEIGHT:
+            self.rect.y += self.speed
+
 
     def draw(self):
         """
@@ -115,7 +140,7 @@ class Player(pygame.sprite.Sprite):
             if self.current_weapon == 'machine_gun':
                 bullet_color = YELLOW
             elif self.current_weapon == 'gatling_gun':
-                bullet_color = DARK_PURPLE
+                bullet_color = MAGENTA
             else:
                 bullet_color = RED
 
@@ -267,6 +292,17 @@ class PowerUp(pygame.sprite.Sprite):
         # The power-up doesn't move, so this method is empty.
         pass
 
+# --- Helper Functions ---
+def draw_floor_background():
+    """Draws a tiled floor pattern on the screen."""
+    for y in range(0, SCREEN_HEIGHT, TILE_SIZE):
+        for x in range(0, SCREEN_WIDTH, TILE_SIZE):
+            if (x // TILE_SIZE + y // TILE_SIZE) % 2 == 0:
+                color = FLOOR_LIGHT_GRAY
+            else:
+                color = FLOOR_DARK_GRAY
+            pygame.draw.rect(screen, color, (x, y, TILE_SIZE, TILE_SIZE))
+
 # --- Menu Functions ---
 def show_start_menu():
     """
@@ -293,9 +329,11 @@ def show_start_menu():
                     pygame.quit()
                     quit()
         
+        # Draw the tiled floor background first
+        draw_floor_background()
+        
         # Draw zombies in the background
         wandering_zombies.update()
-        screen.fill(BLACK)
         wandering_zombies.draw(screen)
 
         # Draw the menu text and buttons on top
@@ -336,7 +374,7 @@ def show_options_menu():
                 if back_rect.collidepoint(event.pos):
                     return "start_menu"
 
-        screen.fill(BLACK)
+        draw_floor_background()
 
         # Title
         title_text = large_font.render("OPTIONS", True, WHITE)
@@ -420,7 +458,7 @@ def show_audio_menu():
                 
                 is_muted = (global_volume == 0)
 
-        screen.fill(BLACK)
+        draw_floor_background()
 
         # Title
         title_text = large_font.render("AUDIO", True, WHITE)
@@ -453,34 +491,97 @@ def show_audio_menu():
 
 def show_controls_menu():
     """
-    Displays the controls menu with a list of keybindings.
+    Displays the controls menu with a list of keybindings, now with remapping.
     """
+    global keybinds
     controls_running = True
+    remap_mode = False
+    current_key_to_remap = None
     
+    # Calculate button positions
+    button_y_start = SCREEN_HEIGHT // 2 - 100
+    button_spacing = 60
+    button_width = 100
+    button_height = 40
+    
+    # Define a list of actions and their button positions
+    actions = [
+        ('move_up', "Move Up"),
+        ('move_down', "Move Down"),
+        ('move_left', "Move Left"),
+        ('move_right', "Move Right")
+    ]
+    
+    action_rects = {}
+
     while controls_running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 quit()
-            if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN and not remap_mode:
                 if back_rect.collidepoint(event.pos):
                     return "options_menu"
-        
-        screen.fill(BLACK)
+                # Check if a remap button was clicked
+                for action, rect in action_rects.items():
+                    if rect.collidepoint(event.pos):
+                        remap_mode = True
+                        current_key_to_remap = action
+            
+            # If in remap mode, wait for a key press
+            if event.type == pygame.KEYDOWN and remap_mode:
+                if event.key not in keybinds.values():
+                    keybinds[current_key_to_remap] = event.key
+                    remap_mode = False
+                    current_key_to_remap = None
+                else:
+                    # Inform the user the key is already in use
+                    # A small message box or console message is fine for now
+                    print("Key is already in use!")
+
+        draw_floor_background()
 
         # Title
         title_text = large_font.render("CONTROLS", True, WHITE)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4))
         screen.blit(title_text, title_rect)
         
-        # Control list
-        move_text = font.render("Move: WASD or Arrow Keys", True, WHITE)
-        move_rect = move_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
-        screen.blit(move_text, move_rect)
+        # Display the current keybindings and change buttons
+        for i, (key_action, key_text) in enumerate(actions):
+            # Display action text
+            action_label = font.render(f'{key_text}:', True, WHITE)
+            action_rect = action_label.get_rect(center=(SCREEN_WIDTH // 2 - 100, button_y_start + i * button_spacing))
+            screen.blit(action_label, action_rect)
+
+            # Display the currently bound key
+            current_key_name = pygame.key.name(keybinds[key_action]).upper()
+            key_name_label = font.render(current_key_name, True, YELLOW)
+            key_name_rect = key_name_label.get_rect(center=(SCREEN_WIDTH // 2, button_y_start + i * button_spacing))
+            screen.blit(key_name_label, key_name_rect)
+
+            # Draw the Change button
+            change_button_rect = pygame.Rect(
+                SCREEN_WIDTH // 2 + 50,
+                button_y_start + i * button_spacing - button_height // 2,
+                button_width,
+                button_height
+            )
+            pygame.draw.rect(screen, (50, 50, 50), change_button_rect, border_radius=10)
+            change_text = font.render("Change", True, WHITE)
+            change_text_rect = change_text.get_rect(center=change_button_rect.center)
+            screen.blit(change_text, change_text_rect)
+            action_rects[key_action] = change_button_rect
         
+        # Display shooting control, which is not remappable
         shoot_text = font.render("Shoot: Left Mouse Button", True, WHITE)
-        shoot_rect = shoot_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        shoot_rect = shoot_text.get_rect(center=(SCREEN_WIDTH // 2, button_y_start + len(actions) * button_spacing + 20))
         screen.blit(shoot_text, shoot_rect)
+
+        # Prompt for key change
+        if remap_mode:
+            prompt_text = font.render(f"Press a new key for '{current_key_to_remap.replace('_', ' ').title()}'", True, MAGENTA)
+            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 200))
+            screen.blit(prompt_text, prompt_rect)
 
         # Back button
         back_text = font.render("Back", True, WHITE)
@@ -504,6 +605,9 @@ def show_pause_menu():
                     return "resume"
                 if main_menu_rect.collidepoint(event.pos):
                     return "start_menu"
+
+        # Draw the tiled floor background first
+        draw_floor_background()
 
         # Draw a semi-transparent overlay
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -537,7 +641,7 @@ def show_game_over_screen(final_score):
 
     game_over_running = True
     while game_over_running:
-        screen.fill(BLACK)
+        draw_floor_background()
         
         # Game Over Title
         game_over_text = large_font.render("GAME OVER", True, RED)
@@ -589,7 +693,7 @@ def main_game_loop():
     all_sprites.add(player)
     score = 0
     last_zombie_spawn_time = pygame.time.get_ticks()
-    zombie_spawn_rate = 1000  # in milliseconds
+    zombie_spawn_rate = 1250 # in milliseconds, changed from 1000
     last_powerup_spawn_time = pygame.time.get_ticks()
     powerup_spawn_rate = 15000 # in milliseconds, a new power-up every 15 seconds
     is_game_over = False
@@ -687,7 +791,7 @@ def main_game_loop():
                     is_game_over = True
 
         # --- Drawing ---
-        screen.fill(BLACK)
+        draw_floor_background()
         all_sprites.draw(screen)
 
         # Display score and health
