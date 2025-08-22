@@ -12,7 +12,9 @@ BLUE = (0, 0, 255)
 DARK_RED = (139, 0, 0)
 YELLOW = (255, 255, 0)
 MAGENTA = (255, 0, 255) # Brighter color for the Gatling gun
-BARRIER_COLOR = (120, 120, 120)
+NEON_CYAN = (0, 255, 255)  # The new color for the power-up
+BARRIER_COLOR = (255, 255, 220) # Bright white with a hint of yellow for visibility
+BLOOD_RED = (180, 0, 0)  # A deep red for blood particles
 
 # New colors for the floor with eight gradients
 FLOOR_GRAY_1 = (20, 20, 20)
@@ -107,6 +109,41 @@ def generate_sound(frequency, duration, volume):
 shoot_sound = generate_sound(500, 50, 0.25) # The volume has been lowered from 0.375 to 0.25
 hit_sound = generate_sound(300, 100, 0.3)
 zombie_death_sound = generate_sound(150, 200, 0.6)
+hurt_sound = generate_sound(100, 150, 0.8) # New sound effect for losing health
+
+# Main menu melody notes and their durations in milliseconds
+# Frequencies for a simple C major scale starting from middle C
+C4 = 261.63
+E4 = 329.63
+G4 = 392.00
+A4 = 440.00
+C5 = 523.25
+NOTES = {
+    'C4': C4,
+    'E4': E4,
+    'G4': G4,
+    'A4': A4,
+    'C5': C5,
+}
+
+# The melody is represented as a list of (note_name, duration) tuples
+MELODY = [
+    ('C4', 300), ('E4', 300), ('G4', 300),
+    ('G4', 600),
+    ('E4', 300), ('C4', 300),
+    ('C5', 300),
+    ('A4', 600),
+    ('G4', 300), ('E4', 300), ('C4', 300),
+    ('C4', 1000)
+]
+
+# Create a list to hold the generated sound objects for the melody
+melody_sounds = []
+for note, duration in MELODY:
+    if note in NOTES:
+        sound = generate_sound(NOTES[note], duration, global_volume-0.4)  # PATCHED
+        melody_sounds.append((sound, duration))
+
 
 # --- Classes ---
 class Player(pygame.sprite.Sprite):
@@ -320,7 +357,7 @@ class PowerUp(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
         self.image = pygame.Surface([20, 20], pygame.SRCALPHA)
-        pygame.draw.circle(self.image, DARK_RED, (10, 10), 10)
+        pygame.draw.circle(self.image, NEON_CYAN, (10, 10), 10)
         self.rect = self.image.get_rect(center=(random.randint(50, SCREEN_WIDTH - 50), random.randint(50, SCREEN_HEIGHT - 50)))
         
     def update(self):
@@ -350,6 +387,23 @@ class Particle:
     def draw(self, screen_surface):
         if self.lifespan > 0 and self.size > 0:
             pygame.draw.circle(screen_surface, self.color, (int(self.pos[0]), int(self.pos[1])), int(self.size))
+
+class BloodStain(pygame.sprite.Sprite):
+    """
+    A persistent sprite for a blood stain on the floor.
+    It appears when a zombie is shot.
+    """
+    def __init__(self, pos):
+        super().__init__()
+        self.size = random.randint(5, 15)
+        self.image = pygame.Surface((self.size * 2, self.size * 2), pygame.SRCALPHA)
+        pygame.draw.circle(self.image, BLOOD_RED, (self.size, self.size), self.size)
+        self.rect = self.image.get_rect(center=pos)
+        self.creation_time = pygame.time.get_ticks()
+
+    def update(self):
+        # Blood stains do not move, but could be set to fade over time
+        pass
 
 class Barrier(pygame.sprite.Sprite):
     """
@@ -408,7 +462,7 @@ def draw_floor_background():
 # --- Menu Functions ---
 def show_start_menu():
     """
-    Displays the game's main menu, with New Game, Options, and Quit buttons.
+    Displays the game's main menu, with New Game, Options, Leaderboards, and Quit buttons.
     """
     menu_running = True
     
@@ -416,6 +470,10 @@ def show_start_menu():
     wandering_zombies = pygame.sprite.Group()
     for _ in range(5):
         wandering_zombies.add(WanderingZombie())
+
+    # Play the main menu music
+    current_note = 0
+    start_time = pygame.time.get_ticks()
 
     while menu_running:
         for event in pygame.event.get():
@@ -427,10 +485,21 @@ def show_start_menu():
                     return "new_game"
                 if options_rect.collidepoint(event.pos):
                     return "options_menu"
+                if leaderboards_rect.collidepoint(event.pos):
+                    return "leaderboards_menu"
                 if quit_rect.collidepoint(event.pos):
                     pygame.quit()
                     quit()
         
+        # Play the main menu melody
+        now = pygame.time.get_ticks()
+        if now - start_time > melody_sounds[current_note][1]:
+            start_time = now
+            current_note += 1
+            if current_note >= len(melody_sounds):
+                current_note = 0 # Loop the melody
+            melody_sounds[current_note][0].play()
+
         # Draw the tiled floor background first
         draw_floor_background()
         
@@ -439,7 +508,7 @@ def show_start_menu():
         wandering_zombies.draw(screen)
 
         # Draw the menu text and buttons on top
-        title_text = large_font.render("ZOMBIE SHOOTER", True, WHITE)
+        title_text = large_font.render("ZOMBIE SHOOT", True, WHITE)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4))
         screen.blit(title_text, title_rect)
 
@@ -449,11 +518,15 @@ def show_start_menu():
         options_text = font.render("Options", True, WHITE)
         options_rect = options_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
 
+        leaderboards_text = font.render("Leaderboards", True, WHITE)
+        leaderboards_rect = leaderboards_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
+
         quit_text = font.render("Quit", True, WHITE)
-        quit_rect = quit_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
+        quit_rect = quit_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100))
 
         screen.blit(new_game_text, new_game_rect)
         screen.blit(options_text, options_rect)
+        screen.blit(leaderboards_text, leaderboards_rect)
         screen.blit(quit_text, quit_rect)
         
         pygame.display.flip()
@@ -501,21 +574,16 @@ def show_options_menu():
         pygame.display.flip()
 
 def show_audio_menu():
-    """
-    Displays the audio options menu with controls for volume and mute.
-    """
-    global global_volume, is_muted, shoot_sound, hit_sound, zombie_death_sound
+    global global_volume, is_muted, shoot_sound, hit_sound, zombie_death_sound, hurt_sound
     audio_running = True
     slider_dragging = False
 
-    # Define slider dimensions and position
     slider_x = SCREEN_WIDTH // 2 - 100
     slider_y = SCREEN_HEIGHT // 2 - 50
     slider_width = 200
     slider_height = 20
     slider_rect = pygame.Rect(slider_x, slider_y, slider_width, slider_height)
 
-    # Mute button dimensions and position
     mute_button_x = SCREEN_WIDTH // 2 - 100
     mute_button_y = SCREEN_HEIGHT // 2
     mute_button_width = 200
@@ -527,22 +595,25 @@ def show_audio_menu():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 quit()
-            
-            # Handle mouse events for the slider and buttons
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if slider_rect.collidepoint(event.pos):
                     slider_dragging = True
                 if mute_button_rect.collidepoint(event.pos):
                     is_muted = not is_muted
-                    # Set volume on individual sound objects instead of the mixer module
                     if is_muted:
                         shoot_sound.set_volume(0)
                         hit_sound.set_volume(0)
                         zombie_death_sound.set_volume(0)
+                        hurt_sound.set_volume(0)
+                        for sound, _ in melody_sounds:
+                            sound.set_volume(0)
                     else:
                         shoot_sound.set_volume(global_volume)
                         hit_sound.set_volume(global_volume)
                         zombie_death_sound.set_volume(global_volume)
+                        hurt_sound.set_volume(global_volume)
+                        for sound, _ in melody_sounds:
+                            sound.set_volume(global_volume)
                 if back_rect.collidepoint(event.pos):
                     return "options_menu"
 
@@ -550,49 +621,39 @@ def show_audio_menu():
                 slider_dragging = False
 
             if event.type == pygame.MOUSEMOTION and slider_dragging:
-                # Update volume based on mouse position
                 mouse_x = event.pos[0]
-                # Clamp the position to the slider's boundaries
                 slider_knob_x = max(slider_x, min(mouse_x, slider_x + slider_width))
                 global_volume = (slider_knob_x - slider_x) / slider_width
-                
-                # Set volume on individual sound objects instead of the mixer module
                 shoot_sound.set_volume(global_volume)
                 hit_sound.set_volume(global_volume)
                 zombie_death_sound.set_volume(global_volume)
-                
+                hurt_sound.set_volume(global_volume)
+                for sound, _ in melody_sounds:
+                    sound.set_volume(global_volume)
                 is_muted = (global_volume == 0)
 
         draw_floor_background()
-
-        # Title
         title_text = large_font.render("AUDIO", True, WHITE)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4))
         screen.blit(title_text, title_rect)
 
-        # Volume label and slider
         volume_text = font.render("Volume", True, WHITE)
         volume_rect = volume_text.get_rect(center=(SCREEN_WIDTH // 2, slider_y - 25))
         screen.blit(volume_text, volume_rect)
-        
-        # Draw the slider track
         pygame.draw.rect(screen, (100, 100, 100), slider_rect)
-        
-        # Convert slider knob position to an integer to prevent crash
         slider_knob_x = slider_x + (global_volume * slider_width)
         pygame.draw.circle(screen, GREEN, (int(slider_knob_x), slider_y + slider_height // 2), 10)
-        
-        # Mute button
+
         mute_button_text = font.render("Mute" if not is_muted else "Unmute", True, WHITE)
         pygame.draw.rect(screen, (50, 50, 50), mute_button_rect)
         screen.blit(mute_button_text, mute_button_text.get_rect(center=mute_button_rect.center))
 
-        # Back button
         back_text = font.render("Back", True, WHITE)
         back_rect = back_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 100))
         screen.blit(back_text, back_rect)
 
         pygame.display.flip()
+
 
 def show_controls_menu():
     """
@@ -782,6 +843,41 @@ def show_game_over_screen(final_score):
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if return_rect.collidepoint(event.pos):
                     return "start_menu"
+                    
+def show_leaderboards():
+    """
+    Displays the leaderboards with the top scores.
+    """
+    global top_scores
+    leaderboards_running = True
+    while leaderboards_running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if back_rect.collidepoint(event.pos):
+                    return "start_menu"
+
+        draw_floor_background()
+
+        # Title
+        title_text = large_font.render("LEADERBOARDS", True, WHITE)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4))
+        screen.blit(title_text, title_rect)
+        
+        # Display top scores
+        for i, score in enumerate(top_scores):
+            score_text = font.render(f"{i + 1}. {score}", True, WHITE)
+            score_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50 + i * 40))
+            screen.blit(score_text, score_rect)
+        
+        # Back button
+        back_text = font.render("Back", True, WHITE)
+        back_rect = back_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 100))
+        screen.blit(back_text, back_rect)
+
+        pygame.display.flip()
 
 def main_game_loop():
     """
@@ -794,6 +890,7 @@ def main_game_loop():
     powerups = pygame.sprite.Group() # New group for power-ups
     barriers = pygame.sprite.Group() # New group for barriers
     particles = [] # A list to hold the new particle effects
+    blood_stains = pygame.sprite.Group() # Group for blood stains on the floor
 
     # --- Game Variables ---
     player = Player()
@@ -927,9 +1024,18 @@ def main_game_loop():
                 zombie.health -= len(bullet_hit_list)
                 # Speed up the zombie when it's hit
                 zombie.speed_up(0.5)
+
+                # Create blood stain and particles when a zombie is hit
+                blood_stain = BloodStain(zombie.rect.center)
+                blood_stains.add(blood_stain)
+                
+                # A smaller burst of particles for a single hit
+                for _ in range(5): 
+                    particles.append(Particle(zombie.rect.center, BLOOD_RED))
+
                 if zombie.health <= 0:
                     zombie_death_sound.play() # Play sound on zombie death
-                    # Create a burst of particles when the zombie is destroyed
+                    # Create a larger burst of particles when the zombie is destroyed
                     for _ in range(20):
                         particles.append(Particle(zombie.rect.center, GREEN))
                     zombie.kill()
@@ -944,13 +1050,17 @@ def main_game_loop():
             player_hits = pygame.sprite.spritecollide(player, zombies, True)
             if player_hits:
                 player.health -= 25
+                hurt_sound.play() # Play the hurt sound effect
                 if player.health <= 0:
                     is_game_over = True
 
         # --- Drawing ---
         draw_floor_background()
+
+        # Draw blood stains first so they are on the lowest layer
+        blood_stains.draw(screen)
         
-        # Draw all sprites including barriers
+        # Draw all other sprites including barriers, player, and enemies
         all_sprites.draw(screen)
         
         # Draw the particles after all sprites
@@ -1016,6 +1126,8 @@ if __name__ == "__main__":
                 current_screen = "game"
             elif action == "options_menu":
                 current_screen = "options"
+            elif action == "leaderboards_menu":
+                current_screen = "leaderboards"
         elif current_screen == "options":
             action = show_options_menu()
             if action == "start_menu":
@@ -1032,6 +1144,10 @@ if __name__ == "__main__":
             action = show_controls_menu()
             if action == "options_menu":
                 current_screen = "options"
+        elif current_screen == "leaderboards":
+            action = show_leaderboards()
+            if action == "start_menu":
+                current_screen = "start_menu"
         elif current_screen == "game":
             result = main_game_loop()
             if result == "start_menu":
