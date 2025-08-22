@@ -41,4 +41,4 @@ To get started, simply download this repository and install the required librari
 Contributing
 Feel free to open an issue or submit a pull request if you have ideas for new features or improvements!
 
-Developed by: [http://frenzypenguin.media FrenzyPenguin Media]
+Developed by: http://frenzypenguin.media
