@@ -13,8 +13,10 @@ DARK_RED = (139, 0, 0)
 YELLOW = (255, 255, 0)
 MAGENTA = (255, 0, 255) # Brighter color for the Gatling gun
 NEON_CYAN = (0, 255, 255)  # The new color for the power-up
-BARRIER_COLOR = (255, 255, 220) # Bright white with a hint of yellow for visibility
+BARRIER_COLOR = BLACK # Changed from bright white to black for obstacles
 BLOOD_RED = (180, 0, 0)  # A deep red for blood particles
+NUKE_GREEN = (50, 205, 50) # New color for the nuke power-up
+
 
 # New colors for the floor with eight gradients
 FLOOR_GRAY_1 = (20, 20, 20)
@@ -165,6 +167,10 @@ class Player(pygame.sprite.Sprite):
         self.current_weapon = 'pistol' # pistol, machine_gun, gatling_gun
         self.last_shot_time = 0
         self.fire_rate = 500 # milliseconds between shots (for pistol)
+        # Create a weapon instance and add it to a list
+        self.weapons = pygame.sprite.Group()
+        self.pistol = Pistol(self)
+        self.weapons.add(self.pistol)
 
     def update(self):
         """
@@ -192,12 +198,15 @@ class Player(pygame.sprite.Sprite):
         if keys[pygame.K_DOWN] and self.rect.bottom < SCREEN_HEIGHT:
             self.rect.y += self.speed
 
+        self.weapons.update(self.rect.center, pygame.mouse.get_pos())
+
 
     def draw(self):
         """
         Draws the player on the screen.
         """
         screen.blit(self.image, self.rect)
+        self.weapons.draw(screen)
 
     def shoot(self, mouse_pos, all_sprites, bullets):
         """
@@ -226,6 +235,61 @@ class Player(pygame.sprite.Sprite):
         Restores player's health up to the maximum.
         """
         self.health = min(self.max_health, self.health + amount)
+
+
+class Pistol(pygame.sprite.Sprite):
+    """
+    Represents the player's weapon, which follows the player and aims at the cursor.
+    Its appearance changes as the weapon is upgraded.
+    """
+    def __init__(self, player):
+        super().__init__()
+        self.player = player
+
+        # --- Create surfaces for each weapon level ---
+        # Level 1: Pistol
+        self.pistol_image = pygame.Surface([20, 10], pygame.SRCALPHA)
+        pygame.draw.rect(self.pistol_image, BLACK, (0, 0, 20, 10))  # Pistol barrel
+        pygame.draw.rect(self.pistol_image, BLACK, (0, 5, 5, 10))   # Pistol handle
+        
+        # Level 2: Machine Gun (larger)
+        self.machine_gun_image = pygame.Surface([30, 15], pygame.SRCALPHA)
+        pygame.draw.rect(self.machine_gun_image, BLACK, (0, 0, 30, 15))
+        pygame.draw.rect(self.machine_gun_image, BLACK, (0, 8, 8, 15))
+
+        # Level 3: Gatling Gun (largest)
+        self.gatling_gun_image = pygame.Surface([45, 22], pygame.SRCALPHA)
+        pygame.draw.rect(self.gatling_gun_image, BLACK, (0, 0, 45, 22))
+        pygame.draw.rect(self.gatling_gun_image, BLACK, (0, 11, 11, 22))
+        
+        # Start with the pistol image as the base
+        self.original_image = self.pistol_image
+        self.image = self.original_image.copy()
+        self.rect = self.image.get_rect(center=self.player.rect.center)
+    
+    def update(self, player_pos, mouse_pos):
+        """
+        Update the position, rotation, and appearance of the weapon.
+        """
+        # Select the correct weapon image based on the player's current weapon
+        if self.player.current_weapon == 'machine_gun':
+            self.original_image = self.machine_gun_image
+        elif self.player.current_weapon == 'gatling_gun':
+            self.original_image = self.gatling_gun_image
+        else: # Default to pistol
+            self.original_image = self.pistol_image
+
+        # Update position to follow the player
+        self.rect.center = player_pos
+        
+        # Calculate the angle to the mouse cursor
+        dx = mouse_pos[0] - self.rect.centerx
+        dy = mouse_pos[1] - self.rect.centery
+        angle = math.degrees(math.atan2(-dy, dx))
+        
+        # Rotate the image and update the rect to match
+        self.image = pygame.transform.rotate(self.original_image, angle)
+        self.rect = self.image.get_rect(center=self.rect.center)
 
 
 class Zombie(pygame.sprite.Sprite):
@@ -363,6 +427,35 @@ class PowerUp(pygame.sprite.Sprite):
     def update(self):
         # The power-up doesn't move, so this method is empty.
         pass
+
+class NukePowerUp(pygame.sprite.Sprite):
+    """
+    Represents a nuke power-up. When shot, it kills all zombies.
+    It blinks to draw attention.
+    """
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface([25, 25], pygame.SRCALPHA)
+        pygame.draw.circle(self.image, NUKE_GREEN, (12, 12), 12)
+        self.rect = self.image.get_rect(center=(random.randint(50, SCREEN_WIDTH - 50), random.randint(50, SCREEN_HEIGHT - 50)))
+        self.last_blink_time = pygame.time.get_ticks()
+        self.blink_interval = 250  # milliseconds
+        self.is_visible = True
+
+    def update(self):
+        """
+        Handles the blinking effect of the power-up.
+        """
+        now = pygame.time.get_ticks()
+        if now - self.last_blink_time > self.blink_interval:
+            self.is_visible = not self.is_visible
+            self.last_blink_time = now
+        
+        # Set alpha to be visible or invisible
+        if self.is_visible:
+            self.image.set_alpha(255)
+        else:
+            self.image.set_alpha(0)
         
 class Particle:
     """
@@ -471,7 +564,7 @@ def show_start_menu():
     for _ in range(5):
         wandering_zombies.add(WanderingZombie())
 
-    # Play the main menu music
+    # Play the main menu melody
     current_note = 0
     start_time = pygame.time.get_ticks()
 
@@ -888,6 +981,7 @@ def main_game_loop():
     bullets = pygame.sprite.Group()
     zombies = pygame.sprite.Group()
     powerups = pygame.sprite.Group() # New group for power-ups
+    nuke_powerups = pygame.sprite.Group() # Group for the nuke power-up
     barriers = pygame.sprite.Group() # New group for barriers
     particles = [] # A list to hold the new particle effects
     blood_stains = pygame.sprite.Group() # Group for blood stains on the floor
@@ -895,11 +989,15 @@ def main_game_loop():
     # --- Game Variables ---
     player = Player()
     all_sprites.add(player)
+    # Add the player's pistol to the sprite group so it can be drawn
+    all_sprites.add(player.pistol)
     score = 0
     last_zombie_spawn_time = pygame.time.get_ticks()
     zombie_spawn_rate = 1250 # in milliseconds, changed from 1000
     last_powerup_spawn_time = pygame.time.get_ticks()
     powerup_spawn_rate = 15000 # in milliseconds, a new power-up every 15 seconds
+    last_nuke_spawn_time = pygame.time.get_ticks()
+    nuke_spawn_rate = 30000 # 30 seconds, less frequent than health power-up
     is_game_over = False
     is_paused = False # New state variable for pausing the game
     is_shooting = False # New state variable to track if the mouse button is held down
@@ -979,6 +1077,7 @@ def main_game_loop():
             zombies.update(player.rect)
             bullets.update()
             powerups.update()
+            nuke_powerups.update() # Update the nuke power-up (for blinking)
             
             # Update and clean up particles
             for particle in particles:
@@ -1015,6 +1114,13 @@ def main_game_loop():
                 powerups.add(new_powerup)
                 last_powerup_spawn_time = now
 
+            # Spawn a new nuke power-up
+            if len(nuke_powerups) == 0 and now - last_nuke_spawn_time > nuke_spawn_rate:
+                new_nuke = NukePowerUp()
+                all_sprites.add(new_nuke)
+                nuke_powerups.add(new_nuke)
+                last_nuke_spawn_time = now
+
             # Check for collisions between bullets and zombies, and bullets and barriers
             # Bullets are destroyed on impact with either
             pygame.sprite.groupcollide(bullets, barriers, True, False)
@@ -1045,6 +1151,18 @@ def main_game_loop():
             powerup_hits = pygame.sprite.groupcollide(powerups, bullets, True, True)
             if powerup_hits:
                 player.restore_health(25) # Restore 25 health
+
+            # Check for collisions between bullets and nuke power-ups
+            nuke_hits = pygame.sprite.groupcollide(nuke_powerups, bullets, True, True)
+            if nuke_hits:
+                # Kill all zombies on screen
+                zombie_death_sound.play() # Play a sound for the effect
+                for zombie in zombies:
+                    # Create death particles for each zombie
+                    for _ in range(20):
+                        particles.append(Particle(zombie.rect.center, GREEN))
+                    zombie.kill()
+                    score += 10 # Give score for each zombie killed
 
             # Check for collisions between player and zombies
             player_hits = pygame.sprite.spritecollide(player, zombies, True)
