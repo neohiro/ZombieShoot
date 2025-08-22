@@ -33,10 +33,10 @@ Technical Details
 Installation
 To get started, simply download this repository and install the required libraries:
 
-git clone https://github.com/neohiro/ZombieShoot.git
-cd zombie-shoot
-pip install pygame
-python ZombieShoot.PY
+    git clone https://github.com/neohiro/ZombieShoot.git
+    cd zombie-shoot
+    pip install pygame
+    python ZombieShoot.PY
 
 Contributing
 Feel free to open an issue or submit a pull request if you have ideas for new features or improvements!
