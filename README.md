@@ -2,7 +2,7 @@
 Zombie Shooter for Linux/Windows
 
 ZombieShoot.PY
-A fast-paced, top-down zombie shooter game built with Pygame. Survive endless waves of the undead, upgrade your weapons, and climb the leaderboards in this retro-inspired arcade action title.
+- A fast-paced, top-down zombie shooter game built with Pygame. Survive endless waves of the undead, upgrade your weapons, and climb the leaderboards in this retro-inspired arcade action title.
 
 Features
 
