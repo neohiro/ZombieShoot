@@ -112,6 +112,8 @@ shoot_sound = generate_sound(500, 50, 0.25) # The volume has been lowered from 0
 hit_sound = generate_sound(300, 100, 0.3)
 zombie_death_sound = generate_sound(150, 200, 0.6)
 hurt_sound = generate_sound(100, 150, 0.8) # New sound effect for losing health
+powerup_sound = generate_sound(800, 100, 0.5)  # New sound for health power-up
+nuke_sound = generate_sound(900, 1000, 0.8)  # New sound for the nuke power-up
 
 # Main menu melody notes and their durations in milliseconds
 # Frequencies for a simple C major scale starting from middle C
@@ -143,7 +145,7 @@ MELODY = [
 melody_sounds = []
 for note, duration in MELODY:
     if note in NOTES:
-        sound = generate_sound(NOTES[note], duration, global_volume-0.4)  # PATCHED
+        sound = generate_sound(NOTES[note], duration, global_volume/3)  # PATCHED
         melody_sounds.append((sound, duration))
 
 
@@ -509,6 +511,31 @@ class Barrier(pygame.sprite.Sprite):
         self.image = pygame.Surface([self.width, self.height])
         self.image.fill(BARRIER_COLOR)
         self.rect = self.image.get_rect(topleft=pos)
+        self.draw_3d_effect() # Now calls this once on creation
+
+    def draw_3d_effect(self):
+        # The lighter color for the inner rectangle
+        lighter_color = (60, 60, 60)
+        # The new darker color for the inner relief
+        darker_color = (30, 30, 30)
+
+        # Draw the lighter gray rectangle first
+        inner_rect = pygame.Rect(
+            5,
+            5,
+            self.width - 10,
+            self.height - 10
+        )
+        pygame.draw.rect(self.image, lighter_color, inner_rect)
+
+        # Draw the new darker gray rectangle on top of the lighter one
+        darker_rect = pygame.Rect(
+            10,
+            10,
+            self.width - 20,
+            self.height - 20
+        )
+        pygame.draw.rect(self.image, darker_color, darker_rect)
 
 # --- Helper Functions ---
 def draw_floor_background():
@@ -520,6 +547,9 @@ def draw_floor_background():
     hex_radius = HEX_SIDE
     hex_width = hex_radius * 2
     hex_height = hex_radius * math.sqrt(3)
+    
+    # A smaller radius for the inner hexagon to create a 3D effect
+    inner_hex_radius = hex_radius * 0.95 
 
     # Calculate number of hexes to draw
     num_cols = int(SCREEN_WIDTH / (hex_width * 0.75)) + 2
@@ -551,6 +581,22 @@ def draw_floor_background():
             ]
             
             pygame.draw.polygon(screen, color, vertices)
+
+            # --- Draw the smaller, lighter inner hexagon for 3D relief ---
+            # Get the lighter color
+            lighter_color_index = min(color_index + 1, len(FLOOR_COLORS) - 1)
+            lighter_color = FLOOR_COLORS[lighter_color_index]
+            
+            inner_vertices = [
+                (x_pos + inner_hex_radius, y_pos),
+                (x_pos + inner_hex_radius * 0.5, y_pos + inner_hex_radius * math.sqrt(3) * 0.5),
+                (x_pos - inner_hex_radius * 0.5, y_pos + inner_hex_radius * math.sqrt(3) * 0.5),
+                (x_pos - inner_hex_radius, y_pos),
+                (x_pos - inner_hex_radius * 0.5, y_pos - inner_hex_radius * math.sqrt(3) * 0.5),
+                (x_pos + inner_hex_radius * 0.5, y_pos - inner_hex_radius * math.sqrt(3) * 0.5),
+            ]
+            
+            pygame.draw.polygon(screen, lighter_color, inner_vertices)
 
 # --- Menu Functions ---
 def show_start_menu():
@@ -667,7 +713,7 @@ def show_options_menu():
         pygame.display.flip()
 
 def show_audio_menu():
-    global global_volume, is_muted, shoot_sound, hit_sound, zombie_death_sound, hurt_sound
+    global global_volume, is_muted, shoot_sound, hit_sound, zombie_death_sound, hurt_sound, powerup_sound, nuke_sound
     audio_running = True
     slider_dragging = False
 
@@ -698,6 +744,8 @@ def show_audio_menu():
                         hit_sound.set_volume(0)
                         zombie_death_sound.set_volume(0)
                         hurt_sound.set_volume(0)
+                        powerup_sound.set_volume(0)
+                        nuke_sound.set_volume(0)
                         for sound, _ in melody_sounds:
                             sound.set_volume(0)
                     else:
@@ -705,6 +753,8 @@ def show_audio_menu():
                         hit_sound.set_volume(global_volume)
                         zombie_death_sound.set_volume(global_volume)
                         hurt_sound.set_volume(global_volume)
+                        powerup_sound.set_volume(global_volume)
+                        nuke_sound.set_volume(global_volume)
                         for sound, _ in melody_sounds:
                             sound.set_volume(global_volume)
                 if back_rect.collidepoint(event.pos):
@@ -721,6 +771,8 @@ def show_audio_menu():
                 hit_sound.set_volume(global_volume)
                 zombie_death_sound.set_volume(global_volume)
                 hurt_sound.set_volume(global_volume)
+                powerup_sound.set_volume(global_volume)
+                nuke_sound.set_volume(global_volume)
                 for sound, _ in melody_sounds:
                     sound.set_volume(global_volume)
                 is_muted = (global_volume == 0)
@@ -971,11 +1023,98 @@ def show_leaderboards():
         screen.blit(back_text, back_rect)
 
         pygame.display.flip()
+        
+def show_controls_dialogue():
+    """
+    Displays a dialogue explaining the game controls.
+    """
+    dialogue_running = True
+    
+    # Get key names from the keybinds dictionary
+    move_up_key = pygame.key.name(keybinds['move_up']).upper()
+    move_down_key = pygame.key.name(keybinds['move_down']).upper()
+    move_left_key = pygame.key.name(keybinds['move_left']).upper()
+    move_right_key = pygame.key.name(keybinds['move_right']).upper()
 
+    # Create text surfaces for each control
+    controls_title = large_font.render("Controls", True, WHITE)
+    
+    control_texts = [
+        f"{move_up_key} - Move Up",
+        f"{move_left_key} - Move Left",
+        f"{move_down_key} - Move Down",
+        f"{move_right_key} - Move Right",
+        "Arrow Keys also work for movement",
+        "Mouse - Aim",
+        "Left Click - Shoot"
+    ]
+    
+    control_surfs = [font.render(text, True, WHITE) for text in control_texts]
+
+    while dialogue_running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+            # Any key press or mouse click will advance the dialogue
+            if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                return
+
+        draw_floor_background()
+        
+        # Display the title
+        title_rect = controls_title.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150))
+        screen.blit(controls_title, title_rect)
+        
+        # Display each control line
+        for i, surf in enumerate(control_surfs):
+            rect = surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50 + i * 40))
+            screen.blit(surf, rect)
+        
+        # Hint to the player how to continue
+        hint_text = font.render("Press any key or click to continue", True, YELLOW)
+        hint_rect = hint_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 240))
+        screen.blit(hint_text, hint_rect)
+
+        pygame.display.flip()
+
+def show_dialogue():
+    """
+    Displays a story dialogue before the game starts.
+    """
+    dialogue_running = True
+    dialogue_text = "This is it... last man standing. Let's show these zombies what humanity is made of!"
+    dialogue_surf = font.render(dialogue_text, True, WHITE)
+    dialogue_rect = dialogue_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+
+    while dialogue_running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+            # Any key press or mouse click will advance the dialogue
+            if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                return
+
+        draw_floor_background()
+        screen.blit(dialogue_surf, dialogue_rect)
+        
+        # Hint to the player how to continue
+        hint_text = font.render("Press any key or click to continue", True, YELLOW)
+        hint_rect = hint_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
+        screen.blit(hint_text, hint_rect)
+
+        pygame.display.flip()
+        
 def main_game_loop():
     """
     Contains the main game logic and drawing loop.
     """
+    # Show the controls dialogue first
+    show_controls_dialogue()
+    # Show the story dialogue before starting the game
+    show_dialogue()
+
     # --- Sprite Groups ---
     all_sprites = pygame.sprite.Group()
     bullets = pygame.sprite.Group()
@@ -1050,19 +1189,22 @@ def main_game_loop():
         # --- Game Logic ---
         if not is_game_over and not is_paused:
             # Check for score thresholds to upgrade gun and increase fire rate
-            if score >= 500 and player.current_weapon != 'gatling_gun':
+            if score >= 1250 and player.current_weapon != 'gatling_gun':
                 player.current_weapon = 'gatling_gun'
-                player.fire_rate = 50 # Base fire rate for gatling gun
-            elif score >= 250 and player.current_weapon == 'pistol':
+                player.fire_rate = 65  # Base fire rate for gatling gun
+            elif score >= 500 and player.current_weapon == 'pistol':
                 player.current_weapon = 'machine_gun'
-                player.fire_rate = 100 # Base fire rate for machine gun
+                player.fire_rate = 125 # Base fire rate for machine gun
             
             # Increase fire rate progressively based on score tiers
-            fire_rate_modifier = score // 250
             if player.current_weapon == 'machine_gun':
-                player.fire_rate = max(50, 100 - (fire_rate_modifier - 1) * 10)
+                score_past_upgrade = score - 500
+                fire_rate_modifier = score_past_upgrade // 400
+                player.fire_rate = max(60, 125 - fire_rate_modifier * 10)
             elif player.current_weapon == 'gatling_gun':
-                player.fire_rate = max(20, 50 - (fire_rate_modifier - 2) * 5)
+                score_past_upgrade = score - 1250
+                fire_rate_modifier = score_past_upgrade // 400
+                player.fire_rate = max(25, 65 - fire_rate_modifier * 5)
 
 
             # Fire the weapon if the player is holding the mouse button
@@ -1150,11 +1292,13 @@ def main_game_loop():
             # Check for collisions between bullets and power-ups
             powerup_hits = pygame.sprite.groupcollide(powerups, bullets, True, True)
             if powerup_hits:
+                powerup_sound.play() # Play a sound when the power-up is hit
                 player.restore_health(25) # Restore 25 health
 
             # Check for collisions between bullets and nuke power-ups
             nuke_hits = pygame.sprite.groupcollide(nuke_powerups, bullets, True, True)
             if nuke_hits:
+                nuke_sound.play() # Play the nuke sound
                 # Kill all zombies on screen
                 zombie_death_sound.play() # Play a sound for the effect
                 for zombie in zombies:
@@ -1177,8 +1321,12 @@ def main_game_loop():
 
         # Draw blood stains first so they are on the lowest layer
         blood_stains.draw(screen)
+
+        # Draw barriers
+        barriers.draw(screen)
         
-        # Draw all other sprites including barriers, player, and enemies
+        # Draw all other sprites including player, and enemies
+        zombies.draw(screen)
         all_sprites.draw(screen)
         
         # Draw the particles after all sprites
