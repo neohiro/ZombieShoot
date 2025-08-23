@@ -2,6 +2,7 @@ import pygame
 import random
 import math
 import numpy as np
+import sys
 
 # --- Game Constants ---
 WHITE = (255, 255, 255)
@@ -420,11 +421,17 @@ class PowerUp(pygame.sprite.Sprite):
     """
     Represents a health-restoring power-up.
     """
-    def __init__(self):
+    def __init__(self, barriers_group):
         super().__init__()
         self.image = pygame.Surface([20, 20], pygame.SRCALPHA)
         pygame.draw.circle(self.image, NEON_CYAN, (10, 10), 10)
-        self.rect = self.image.get_rect(center=(random.randint(50, SCREEN_WIDTH - 50), random.randint(50, SCREEN_HEIGHT - 50)))
+        self.rect = self.image.get_rect()
+        
+        # Keep generating a position until it doesn't collide with a barrier
+        while True:
+            self.rect.center = (random.randint(50, SCREEN_WIDTH - 50), random.randint(50, SCREEN_HEIGHT - 50))
+            if not pygame.sprite.spritecollide(self, barriers_group, False):
+                break
         
     def update(self):
         # The power-up doesn't move, so this method is empty.
@@ -435,11 +442,18 @@ class NukePowerUp(pygame.sprite.Sprite):
     Represents a nuke power-up. When shot, it kills all zombies.
     It blinks to draw attention.
     """
-    def __init__(self):
+    def __init__(self, barriers_group):
         super().__init__()
         self.image = pygame.Surface([25, 25], pygame.SRCALPHA)
         pygame.draw.circle(self.image, NUKE_GREEN, (12, 12), 12)
-        self.rect = self.image.get_rect(center=(random.randint(50, SCREEN_WIDTH - 50), random.randint(50, SCREEN_HEIGHT - 50)))
+        self.rect = self.image.get_rect()
+        
+        # Keep generating a position until it doesn't collide with a barrier
+        while True:
+            self.rect.center = (random.randint(50, SCREEN_WIDTH - 50), random.randint(50, SCREEN_HEIGHT - 50))
+            if not pygame.sprite.spritecollide(self, barriers_group, False):
+                break
+        
         self.last_blink_time = pygame.time.get_ticks()
         self.blink_interval = 250  # milliseconds
         self.is_visible = True
@@ -618,7 +632,7 @@ def show_start_menu():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if new_game_rect.collidepoint(event.pos):
                     return "new_game"
@@ -628,7 +642,7 @@ def show_start_menu():
                     return "leaderboards_menu"
                 if quit_rect.collidepoint(event.pos):
                     pygame.quit()
-                    quit()
+                    sys.exit()
         
         # Play the main menu melody
         now = pygame.time.get_ticks()
@@ -679,7 +693,7 @@ def show_options_menu():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if audio_rect.collidepoint(event.pos):
                     return "audio_menu"
@@ -733,7 +747,7 @@ def show_audio_menu():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if slider_rect.collidepoint(event.pos):
                     slider_dragging = True
@@ -829,7 +843,7 @@ def show_controls_menu():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN and not remap_mode:
                 if back_rect.collidepoint(event.pos):
                     return "options_menu"
@@ -910,7 +924,7 @@ def show_pause_menu():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if resume_rect.collidepoint(event.pos):
                     return "resume"
@@ -984,7 +998,7 @@ def show_game_over_screen(final_score):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if return_rect.collidepoint(event.pos):
                     return "start_menu"
@@ -999,7 +1013,7 @@ def show_leaderboards():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if back_rect.collidepoint(event.pos):
                     return "start_menu"
@@ -1055,7 +1069,7 @@ def show_controls_dialogue():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                quit()
+                sys.exit()
             # Any key press or mouse click will advance the dialogue
             if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
                 return
@@ -1091,7 +1105,7 @@ def show_dialogue():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                quit()
+                sys.exit()
             # Any key press or mouse click will advance the dialogue
             if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
                 return
@@ -1251,14 +1265,14 @@ def main_game_loop():
             # Spawn a new power-up if one isn't on screen
             now = pygame.time.get_ticks()
             if len(powerups) == 0 and now - last_powerup_spawn_time > powerup_spawn_rate:
-                new_powerup = PowerUp()
+                new_powerup = PowerUp(barriers)
                 all_sprites.add(new_powerup)
                 powerups.add(new_powerup)
                 last_powerup_spawn_time = now
 
             # Spawn a new nuke power-up
             if len(nuke_powerups) == 0 and now - last_nuke_spawn_time > nuke_spawn_rate:
-                new_nuke = NukePowerUp()
+                new_nuke = NukePowerUp(barriers)
                 all_sprites.add(new_nuke)
                 nuke_powerups.add(new_nuke)
                 last_nuke_spawn_time = now
