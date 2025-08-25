@@ -1202,6 +1202,16 @@ def main_game_loop():
         
         # --- Game Logic ---
         if not is_game_over and not is_paused:
+            # Store the old max health to calculate the increase
+            old_max_health = player.max_health
+            
+            # Incrementally increase max health based on score (10 HP per 250 points)
+            player.max_health = 100 + (score // 250) * 10
+            
+            # If max health has increased, add the difference to the current health
+            if player.max_health > old_max_health:
+                player.health += player.max_health - old_max_health
+            
             # Check for score thresholds to upgrade gun and increase fire rate
             if score >= 1250 and player.current_weapon != 'gatling_gun':
                 player.current_weapon = 'gatling_gun'
@@ -1325,7 +1335,10 @@ def main_game_loop():
             # Check for collisions between player and zombies
             player_hits = pygame.sprite.spritecollide(player, zombies, True)
             if player_hits:
-                player.health -= 25
+                # Calculate damage based on score (player's level)
+                # Base damage is 25, reduced by 1 for every 100 score points, with a minimum of 5.
+                damage_taken = max(5, 25 - (score // 100))
+                player.health -= damage_taken
                 hurt_sound.play() # Play the hurt sound effect
                 if player.health <= 0:
                     is_game_over = True
@@ -1347,16 +1360,7 @@ def main_game_loop():
         for particle in particles:
             particle.draw(screen)
 
-        # Display score and health
-        score_text = font.render(f'Score: {score}', True, WHITE)
-        screen.blit(score_text, (10, 10))
-        
-        # Display weapon name
-        weapon_name = player.current_weapon.replace('_', ' ').title()
-        weapon_surf = font.render(f'Weapon: {weapon_name}', True, WHITE)
-        screen.blit(weapon_surf, (10, 80))
-
-        # Health bar drawing
+        # Health bar drawing (now at the top)
         # Determine health bar color based on current health
         if player.health > 75:
             health_color = GREEN
@@ -1368,13 +1372,21 @@ def main_game_loop():
             health_color = RED
 
         # Draw the background for the health bar
-        health_bar_rect_bg = pygame.Rect(10, 50, 150, 20)
+        health_bar_rect_bg = pygame.Rect(10, 10, 150, 20)
         pygame.draw.rect(screen, (50, 50, 50), health_bar_rect_bg, border_radius=5)
 
         # Calculate the width of the health bar
         health_bar_width = (player.health / player.max_health) * 150
-        health_bar_rect = pygame.Rect(10, 50, health_bar_width, 20)
+        health_bar_rect = pygame.Rect(10, 10, health_bar_width, 20)
         pygame.draw.rect(screen, health_color, health_bar_rect, border_radius=5)
+        
+        # Display score and weapon info below the health bar
+        score_text = font.render(f'Score: {score}', True, WHITE)
+        screen.blit(score_text, (10, 40))
+        
+        weapon_name = player.current_weapon.replace('_', ' ').title()
+        weapon_surf = font.render(f'Weapon: {weapon_name}', True, WHITE)
+        screen.blit(weapon_surf, (10, 70))
         
         if is_game_over:
             # Return final score to main loop
