@@ -158,9 +158,15 @@ class Player(pygame.sprite.Sprite):
     """
     def __init__(self):
         super().__init__()
-        # Create a circular player icon
+        # Create a visually improved circular player icon
         self.image = pygame.Surface([50, 50], pygame.SRCALPHA)
-        pygame.draw.circle(self.image, BLUE, (25, 25), 25)
+        # Outer darker ring for depth
+        pygame.draw.circle(self.image, (0, 0, 139), (25, 25), 25)
+        # Main blue body
+        pygame.draw.circle(self.image, BLUE, (25, 25), 22)
+        # Inner lighter circle for a 3D effect
+        pygame.draw.circle(self.image, (100, 100, 255), (25, 25), 15)
+        
         self.rect = self.image.get_rect()
         self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
         self.speed = 5
@@ -249,21 +255,26 @@ class Pistol(pygame.sprite.Sprite):
         super().__init__()
         self.player = player
 
-        # --- Create surfaces for each weapon level ---
+        # --- Create surfaces for each weapon level with improved detail ---
         # Level 1: Pistol
         self.pistol_image = pygame.Surface([20, 10], pygame.SRCALPHA)
-        pygame.draw.rect(self.pistol_image, BLACK, (0, 0, 20, 10))  # Pistol barrel
-        pygame.draw.rect(self.pistol_image, BLACK, (0, 5, 5, 10))   # Pistol handle
+        pygame.draw.rect(self.pistol_image, (80, 80, 80), (0, 0, 20, 8))   # Main body
+        pygame.draw.rect(self.pistol_image, (50, 50, 50), (3, 6, 5, 4))    # Handle
         
-        # Level 2: Machine Gun (larger)
+        # Level 2: Machine Gun (larger and more detailed)
         self.machine_gun_image = pygame.Surface([30, 15], pygame.SRCALPHA)
-        pygame.draw.rect(self.machine_gun_image, BLACK, (0, 0, 30, 15))
-        pygame.draw.rect(self.machine_gun_image, BLACK, (0, 8, 8, 15))
+        pygame.draw.rect(self.machine_gun_image, (80, 80, 80), (0, 0, 30, 10)) # Main body
+        pygame.draw.rect(self.machine_gun_image, (50, 50, 50), (5, 8, 7, 7))  # Handle
+        pygame.draw.rect(self.machine_gun_image, (100, 100, 100), (0, 0, 30, 2)) # Top rail
 
-        # Level 3: Gatling Gun (largest)
+        # Level 3: Gatling Gun (largest and most detailed)
         self.gatling_gun_image = pygame.Surface([45, 22], pygame.SRCALPHA)
-        pygame.draw.rect(self.gatling_gun_image, BLACK, (0, 0, 45, 22))
-        pygame.draw.rect(self.gatling_gun_image, BLACK, (0, 11, 11, 22))
+        pygame.draw.rect(self.gatling_gun_image, (80, 80, 80), (0, 0, 45, 18)) # Main body
+        pygame.draw.rect(self.gatling_gun_image, (50, 50, 50), (10, 15, 10, 7)) # Handle
+        # Simulate multiple barrels
+        pygame.draw.rect(self.gatling_gun_image, (100, 100, 100), (0, 0, 45, 4))
+        pygame.draw.rect(self.gatling_gun_image, (100, 100, 100), (0, 7, 45, 4))
+        pygame.draw.rect(self.gatling_gun_image, (100, 100, 100), (0, 14, 45, 4))
         
         # Start with the pistol image as the base
         self.original_image = self.pistol_image
@@ -298,15 +309,21 @@ class Pistol(pygame.sprite.Sprite):
 class Zombie(pygame.sprite.Sprite):
     """
     Represents a zombie enemy.
-    Moves towards the player.
-    Initial speed is slower, but increases when hit by a bullet.
+    Moves towards the player and has a subtle pulsating animation.
     """
     def __init__(self, initial_health):
         super().__init__()
-        # Create a circular zombie icon
-        self.image = pygame.Surface([40, 40], pygame.SRCALPHA)
-        pygame.draw.circle(self.image, GREEN, (20, 20), 20)
+        # Create a more detailed, layered zombie icon
+        self.original_image = pygame.Surface([40, 40], pygame.SRCALPHA)
+        pygame.draw.circle(self.original_image, (0, 80, 0), (20, 20), 20)  # Darker outer ring
+        pygame.draw.circle(self.original_image, GREEN, (20, 20), 17) # Main green body
+        self.image = self.original_image.copy()
         self.rect = self.image.get_rect()
+        
+        # Variables for the pulsating animation
+        self.pulse_timer = 0
+        self.pulse_speed = random.uniform(1.5, 3)
+
         # Spawn zombie at a random position outside the screen
         side = random.choice(['top', 'bottom', 'left', 'right'])
         if side == 'top':
@@ -328,8 +345,16 @@ class Zombie(pygame.sprite.Sprite):
 
     def update(self, player_rect):
         """
-        Moves the zombie towards the player's current position.
+        Moves the zombie towards the player and applies a pulsating visual effect.
         """
+        # Pulsating effect
+        self.pulse_timer += self.pulse_speed * 0.1
+        scale = 1.0 + math.sin(self.pulse_timer) * 0.05  # Pulse by 5%
+        center = self.rect.center
+        self.image = pygame.transform.scale(self.original_image, (int(40 * scale), int(40 * scale)))
+        self.rect = self.image.get_rect(center=center)
+
+        # Movement
         dx = player_rect.x - self.rect.x
         dy = player_rect.y - self.rect.y
         dist = math.hypot(dx, dy)
@@ -339,9 +364,11 @@ class Zombie(pygame.sprite.Sprite):
             
     def speed_up(self, amount):
         """
-        Increases the zombie's speed.
+        Increases the zombie's speed, capped at the player's speed.
         """
         self.speed += amount
+        if self.speed > 5: # Player's speed is 5
+            self.speed = 5
 
     def draw(self):
         """
@@ -379,6 +406,7 @@ class WanderingZombie(Zombie):
     def update(self):
         """
         Moves the zombie and resets its position if it goes off-screen.
+        Does not call parent update to avoid pulsing and seeking player.
         """
         self.rect.x += self.vel_x
         self.rect.y += self.vel_y
@@ -390,12 +418,19 @@ class WanderingZombie(Zombie):
 
 class Bullet(pygame.sprite.Sprite):
     """
-    Represents a bullet fired by the player.
+    Represents a bullet fired by the player, with a glow effect.
     """
     def __init__(self, pos, direction, color):
         super().__init__()
-        self.image = pygame.Surface([5, 5])
-        self.image.fill(color)
+        self.image = pygame.Surface([14, 14], pygame.SRCALPHA)
+        
+        # Create a semi-transparent glow effect
+        glow_color = (min(color[0]+50, 255), min(color[1]+50, 255), min(color[2]+50, 255), 100)
+        pygame.draw.circle(self.image, glow_color, (7, 7), 7)
+        
+        # Draw the solid bullet core
+        pygame.draw.circle(self.image, color, (7, 7), 4)
+
         self.rect = self.image.get_rect(center=pos)
         self.speed = 10
         self.vel_x = self.speed * math.cos(direction)
@@ -419,12 +454,17 @@ class Bullet(pygame.sprite.Sprite):
         
 class PowerUp(pygame.sprite.Sprite):
     """
-    Represents a health-restoring power-up.
+    Represents a health-restoring power-up with a first-aid cross symbol.
     """
     def __init__(self, barriers_group):
         super().__init__()
         self.image = pygame.Surface([20, 20], pygame.SRCALPHA)
+        # Main body of the power-up
         pygame.draw.circle(self.image, NEON_CYAN, (10, 10), 10)
+        # White first-aid cross
+        pygame.draw.rect(self.image, WHITE, (8, 3, 4, 14)) # Vertical bar
+        pygame.draw.rect(self.image, WHITE, (3, 8, 14, 4)) # Horizontal bar
+
         self.rect = self.image.get_rect()
         
         # Keep generating a position until it doesn't collide with a barrier
@@ -445,7 +485,13 @@ class NukePowerUp(pygame.sprite.Sprite):
     def __init__(self, barriers_group):
         super().__init__()
         self.image = pygame.Surface([25, 25], pygame.SRCALPHA)
+        # Draw the main body with a letter 'N' for Nuke
         pygame.draw.circle(self.image, NUKE_GREEN, (12, 12), 12)
+        n_font = pygame.font.Font(None, 24)
+        n_text = n_font.render("N", True, WHITE)
+        n_rect = n_text.get_rect(center=(12, 12))
+        self.image.blit(n_text, n_rect)
+        
         self.rect = self.image.get_rect()
         
         # Keep generating a position until it doesn't collide with a barrier
@@ -534,21 +580,11 @@ class Barrier(pygame.sprite.Sprite):
         darker_color = (30, 30, 30)
 
         # Draw the lighter gray rectangle first
-        inner_rect = pygame.Rect(
-            5,
-            5,
-            self.width - 10,
-            self.height - 10
-        )
+        inner_rect = pygame.Rect(5, 5, self.width - 10, self.height - 10)
         pygame.draw.rect(self.image, lighter_color, inner_rect)
 
         # Draw the new darker gray rectangle on top of the lighter one
-        darker_rect = pygame.Rect(
-            10,
-            10,
-            self.width - 20,
-            self.height - 20
-        )
+        darker_rect = pygame.Rect(10, 10, self.width - 20, self.height - 20)
         pygame.draw.rect(self.image, darker_color, darker_rect)
 
 # --- Helper Functions ---
@@ -1154,6 +1190,8 @@ def main_game_loop():
     is_game_over = False
     is_paused = False # New state variable for pausing the game
     is_shooting = False # New state variable to track if the mouse button is held down
+    damage_flash_timer = 0 # Timer for the red screen flash effect
+    nuke_shockwave = None # Dictionary to manage the nuke explosion visual
 
     # Generate a random number of barriers and place them on the screen
     num_barriers = random.randint(3, 7)
@@ -1270,7 +1308,7 @@ def main_game_loop():
                 zombies.add(new_zombie)
                 last_zombie_spawn_time = now
                 # Increase difficulty over time by reducing spawn rate
-                zombie_spawn_rate = max(200, zombie_spawn_rate - 5)
+                zombie_spawn_rate = max(400, zombie_spawn_rate - 2)
 
             # Spawn a new power-up if one isn't on screen
             now = pygame.time.get_ticks()
@@ -1323,6 +1361,9 @@ def main_game_loop():
             nuke_hits = pygame.sprite.groupcollide(nuke_powerups, bullets, True, True)
             if nuke_hits:
                 nuke_sound.play() # Play the nuke sound
+                # Get nuke position for shockwave effect
+                nuke_pos = list(nuke_hits.keys())[0].rect.center
+                nuke_shockwave = {'pos': nuke_pos, 'radius': 0, 'max_radius': 400, 'speed': 25}
                 # Kill all zombies on screen
                 zombie_death_sound.play() # Play a sound for the effect
                 for zombie in zombies:
@@ -1340,6 +1381,7 @@ def main_game_loop():
                 damage_taken = max(5, 25 - (score // 100))
                 player.health -= damage_taken
                 hurt_sound.play() # Play the hurt sound effect
+                damage_flash_timer = 5 # Flash the screen for 5 frames
                 if player.health <= 0:
                     is_game_over = True
 
@@ -1360,30 +1402,41 @@ def main_game_loop():
         for particle in particles:
             particle.draw(screen)
 
-        # Health bar drawing (now at the top)
-        # Determine health bar color based on current health
-        if player.health > 75:
-            health_color = GREEN
-        elif player.health > 50:
-            health_color = (255, 255, 0) # Yellow
-        elif player.health > 25:
-            health_color = (255, 165, 0) # Orange
-        else:
-            health_color = RED
+        # Draw the nuke shockwave effect if it's active
+        if nuke_shockwave:
+            pygame.draw.circle(screen, WHITE, nuke_shockwave['pos'], int(nuke_shockwave['radius']), 8)
+            nuke_shockwave['radius'] += nuke_shockwave['speed']
+            if nuke_shockwave['radius'] > nuke_shockwave['max_radius']:
+                nuke_shockwave = None
+        
+        # Draw the damage flash effect if active
+        if damage_flash_timer > 0:
+            flash_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            flash_surface.fill((255, 0, 0, 100))
+            screen.blit(flash_surface, (0, 0))
+            damage_flash_timer -= 1
+        
+        # --- HUD Drawing ---
+        # Create a semi-transparent panel for the HUD
+        hud_panel = pygame.Surface((200, 100), pygame.SRCALPHA)
+        hud_panel.fill((50, 50, 50, 150))
+        screen.blit(hud_panel, (5, 5))
 
-        # Draw the background for the health bar
+        # Health bar drawing
+        if player.health > 75: health_color = GREEN
+        elif player.health > 50: health_color = (255, 255, 0) # Yellow
+        elif player.health > 25: health_color = (255, 165, 0) # Orange
+        else: health_color = RED
+
         health_bar_rect_bg = pygame.Rect(10, 10, 150, 20)
         pygame.draw.rect(screen, (50, 50, 50), health_bar_rect_bg, border_radius=5)
-
-        # Calculate the width of the health bar
         health_bar_width = (player.health / player.max_health) * 150
         health_bar_rect = pygame.Rect(10, 10, health_bar_width, 20)
         pygame.draw.rect(screen, health_color, health_bar_rect, border_radius=5)
         
-        # Display score and weapon info below the health bar
+        # Display score and weapon info on the HUD
         score_text = font.render(f'Score: {score}', True, WHITE)
         screen.blit(score_text, (10, 40))
-        
         weapon_name = player.current_weapon.replace('_', ' ').title()
         weapon_surf = font.render(f'Weapon: {weapon_name}', True, WHITE)
         screen.blit(weapon_surf, (10, 70))
