@@ -45,7 +45,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           pyinstaller --noconfirm --onedir --windowed ZombieShoot.PY
-          Compress-Archive -Path "dist\ZombieShoot\*" -DestinationPath "ZombieShoot-Windows.zip" -Force
+          Compress-Archive -Path "dist\ZombieShoot" -DestinationPath "ZombieShoot-Windows.zip" -Force
 
       - name: Build macOS Executable
         if: matrix.os == 'macos-latest'
