@@ -1,5 +1,9 @@
 # ZombieShoot
-Zombie Shooter for Linux/Windows
+[![Python 3.x](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/downloads/)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgray.svg)](https://github.com/)
+[![Build Status](https://github.com/neohiro/ZombieShoot/actions/workflows/release.yml/badge.svg)](https://github.com/neohiro/ZombieShoot/actions)
+
+Zombie Shooter for Linux, Windows, and macOS
 
 <img width="1371" height="877" alt="image" src="https://github.com/user-attachments/assets/2dcd4b1f-6219-4c80-9cf4-ca76964ec2c3" />
 
