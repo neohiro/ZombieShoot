@@ -47,4 +47,9 @@ To get started, simply download this repository and install the required librari
 Contributing
 - Feel free to open an issue or submit a pull request if you have ideas for new features or improvements!
 
-Developed by: http://frenzypenguin.media
+Developed by: 
+## 📦 Installation
+
+You can download the compiled standalone release for your operating system (Windows, macOS, or Linux) directly from the **[Releases](../../releases)** tab. No Python installation is required! Just download the .zip for your OS, extract, and run.
+
+http://frenzypenguin.media
