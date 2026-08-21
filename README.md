@@ -15,7 +15,7 @@ Features
 - Dynamic Gameplay: Face off against an ever-increasing horde of zombies with a simple and intuitive top-down perspective.
 - Weapon Upgrades: Start with a basic pistol and progress to powerful weapons like the machine gun and the devastating Gatling gun.
 - Procedural Generation: The game world features a procedurally generated hexagonal floor pattern, ensuring every session feels unique.
-- Persistent Leaderboards: Your high scores are saved, allowing you to track your progress and compete against yourself to survive longer.
+- Session Leaderboards: Your best scores are tracked for every run, so you can compete against yourself to survive longer.
 - Customizable Controls: The game's controls can be fully remapped in the options menu to suit your play style.
 - In-House Sound Generation: All sound effects and the main menu music are generated programmatically, providing a unique and consistent audio experience.
 - Visual Effects: Get into the action with visual feedback from blood splatters and particle effects when you take down a zombie.
@@ -40,16 +40,15 @@ Installation
 To get started, simply download this repository and install the required libraries:
 
     git clone https://github.com/neohiro/ZombieShoot.git
-    cd zombie-shoot
-    pip install pygame
+    cd ZombieShoot
+    pip install -r requirements.txt
     python ZombieShoot.PY
 
 Contributing
 - Feel free to open an issue or submit a pull request if you have ideas for new features or improvements!
 
-Developed by: 
 ## 📦 Installation
 
 You can download the compiled standalone release for your operating system (Windows, macOS, or Linux) directly from the **[Releases](../../releases)** tab. No Python installation is required! Just download the .zip for your OS, extract, and run.
 
-http://frenzypenguin.media
+🔗 [frenzypenguin.media](https://linktr.ee/frenzypenguin.media)
